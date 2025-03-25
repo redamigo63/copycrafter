@@ -1,0 +1,77 @@
+name: Build and Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.5'
+          channel: 'stable'
+      - name: Install create-dmg
+        run: brew install create-dmg
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+      - name: Build macOS
+        run: |
+          flutter config --enable-macos-desktop
+          flutter build macos --release
+      - name: Create DMG
+        run: |
+          mkdir -p releases
+          create-dmg \
+            --volname "CopyCrafter" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "CopyCrafter.app" 200 190 \
+            --hide-extension "CopyCrafter.app" \
+            --app-drop-link 600 185 \
+            "releases/CopyCrafter-${{ env.VERSION }}-macOS.dmg" \
+            "build/macos/Build/Products/Release/CopyCrafter.app"
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: releases/CopyCrafter-${{ env.VERSION }}-macOS.dmg
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.5'
+          channel: 'stable'
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $env:GITHUB_ENV
+        shell: bash
+      - name: Build Windows
+        run: |
+          flutter config --enable-windows-desktop
+          flutter build windows --release
+      - name: Package Windows build
+        run: |
+          mkdir -p releases
+          Compress-Archive -Path build\windows\runner\Release\* -DestinationPath releases\CopyCrafter-${{ env.VERSION }}-windows.zip
+        shell: pwsh
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: releases/CopyCrafter-${{ env.VERSION }}-windows.zip
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
