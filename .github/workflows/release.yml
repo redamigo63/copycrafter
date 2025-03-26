@@ -22,10 +22,49 @@ jobs:
       - name: Get version
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+      - name: Import Apple Certificate
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Create keychain
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          
+          # Import certificate
+          echo "${APPLE_CERTIFICATE_BASE64}" | base64 --decode > certificate.p12
+          security import certificate.p12 -k build.keychain -P "${APPLE_CERTIFICATE_PASSWORD}" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${KEYCHAIN_PASSWORD}" build.keychain
       - name: Build macOS
         run: |
           flutter config --enable-macos-desktop
           flutter build macos --release
+      - name: Sign macOS App
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+        run: |
+          # Sign the app
+          /usr/bin/codesign --force --options runtime --deep --sign "$APPLE_DEVELOPER_ID" "build/macos/Build/Products/Release/CopyCrafter.app"
+          # Verify signing
+          codesign -vvv --deep --strict "build/macos/Build/Products/Release/CopyCrafter.app"
+      - name: Notarize App
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Create a temporary file for the app
+          ditto -c -k --keepParent "build/macos/Build/Products/Release/CopyCrafter.app" CopyCrafter.zip
+          
+          # Submit for notarization
+          xcrun notarytool submit CopyCrafter.zip --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          
+          # Staple the notarization ticket
+          xcrun stapler staple "build/macos/Build/Products/Release/CopyCrafter.app"
       - name: Create DMG
         run: |
           mkdir -p releases
@@ -39,6 +78,23 @@ jobs:
             --app-drop-link 600 185 \
             "releases/CopyCrafter-${{ env.VERSION }}-macOS.dmg" \
             "build/macos/Build/Products/Release/CopyCrafter.app"
+      - name: Sign DMG
+        env:
+          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+        run: |
+          # Sign the DMG
+          codesign --force --options runtime --sign "$APPLE_DEVELOPER_ID" "releases/CopyCrafter-${{ env.VERSION }}-macOS.dmg"
+      - name: Notarize DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Submit DMG for notarization
+          xcrun notarytool submit "releases/CopyCrafter-${{ env.VERSION }}-macOS.dmg" --apple-id "$APPLE_ID" --password "$APPLE_ID_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          
+          # Staple the notarization ticket to the DMG
+          xcrun stapler staple "releases/CopyCrafter-${{ env.VERSION }}-macOS.dmg"
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:
@@ -59,6 +115,15 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $env:GITHUB_ENV
         shell: bash
+      - name: Install Windows certificate
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create certificate file from base64
+          $certificateBytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
+          Set-Content -Path certificate.pfx -Value $certificateBytes -Encoding Byte
+        shell: pwsh
       - name: Build Windows
         run: |
           flutter config --enable-windows-desktop
@@ -66,6 +131,13 @@ jobs:
       - name: List build directory
         run: |
           Get-ChildItem -Path build\windows -Recurse
+        shell: pwsh
+      - name: Sign Windows executable
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          # Sign the executable
+          & 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe' sign /f certificate.pfx /p "$env:WINDOWS_CERTIFICATE_PASSWORD" /td sha256 /fd sha256 "build\windows\x64\runner\Release\copycrafter.exe"
         shell: pwsh
       - name: Package Windows build
         run: |
