@@ -115,15 +115,6 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $env:GITHUB_ENV
         shell: bash
-      - name: Install Windows certificate
-        env:
-          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: |
-          # Create certificate file from base64
-          $certificateBytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
-          Set-Content -Path certificate.pfx -Value $certificateBytes -Encoding Byte
-        shell: pwsh
       - name: Build Windows
         run: |
           flutter config --enable-windows-desktop
@@ -131,13 +122,6 @@ jobs:
       - name: List build directory
         run: |
           Get-ChildItem -Path build\windows -Recurse
-        shell: pwsh
-      - name: Sign Windows executable
-        env:
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: |
-          # Sign the executable
-          & 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe' sign /f certificate.pfx /p "$env:WINDOWS_CERTIFICATE_PASSWORD" /td sha256 /fd sha256 "build\windows\x64\runner\Release\copycrafter.exe"
         shell: pwsh
       - name: Package Windows build
         run: |
