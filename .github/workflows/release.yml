@@ -63,10 +63,14 @@ jobs:
         run: |
           flutter config --enable-windows-desktop
           flutter build windows --release
+      - name: List build directory
+        run: |
+          Get-ChildItem -Path build\windows -Recurse
+        shell: pwsh
       - name: Package Windows build
         run: |
           mkdir -p releases
-          Compress-Archive -Path build\windows\runner\Release\* -DestinationPath releases\CopyCrafter-${{ env.VERSION }}-windows.zip
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath releases\CopyCrafter-${{ env.VERSION }}-windows.zip
         shell: pwsh
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
