@@ -17,6 +17,18 @@ A desktop application for macOS and Windows that helps browse folders and copy f
   - **.NET Projects**: Parse .csproj, .vbproj, and .sln files
   - **Android Projects**: Organize Android project files in a logical structure
   - **Flutter Projects**: Display Flutter project components in an organized way
+- **Privacy-Focused**: Completely offline with no analytics or tracking
+
+## Privacy
+
+CopyCrafter is built with privacy as a core principle:
+
+- **No Analytics**: The app does not include any analytics or tracking code
+- **No Network Calls**: CopyCrafter operates completely offline and never makes any network requests
+- **Fully Open Source**: All code is open source and can be audited for privacy
+- **Local-Only Processing**: All operations are performed locally on your device
+
+Your code and file information never leaves your computer unless you explicitly copy and paste it elsewhere.
 
 ## Getting Started
 
